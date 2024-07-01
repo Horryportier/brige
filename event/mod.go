@@ -1,10 +1,6 @@
 package event
 
-type EventRegistry map[string][]string
-
-type EventDescription struct {
+type Event struct {
 	Name string
 	Args map[string]any
 }
-
-

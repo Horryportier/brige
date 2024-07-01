@@ -1,8 +1,14 @@
 package msg
 
 type MsgType int
+type Response int
 
 const (
-	Exit MsgType = iota
+	MsgErr MsgType = iota
+	Event
 	Echo
+	Exit
+
+	ResErr Response = iota
+	Ok
 )

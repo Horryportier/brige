@@ -1,66 +1,98 @@
 package server
 
 import (
+	"brige/app/event"
 	"brige/app/msg"
-	"fmt"
+	"encoding/json"
+	"log"
 	"net"
 	"os"
 	"strconv"
 )
 
-type ServerConfig struct {
+var (
+	server = Server{make(chan []event.Event), make(chan []Connection)}
+)
+
+type Connection map[net.Conn][]string
+
+type Server struct {
+	event_queue chan []event.Event
+	connections chan []Connection
+}
+
+type ServerSetup struct {
 	Host string
 	Port int
 }
 
-func Entry(config ServerConfig) {
-	// Listen for incoming connections.
+func LoadServerSetup(path string) (ServerSetup, error) {
+	buf, err := os.ReadFile(path)
+	if err != nil {
+		return ServerSetup{}, err
+	}
+	var setup ServerSetup
+	err = json.Unmarshal(buf, &setup)
+	if err != nil {
+		return ServerSetup{}, err
+	}
+
+	return setup, nil
+}
+
+func Start(config ServerSetup) error {
+
 	l, err := net.Listen("tcp", config.Host+":"+strconv.Itoa(config.Port))
 	if err != nil {
-		fmt.Println("Error listening:", err.Error())
-		os.Exit(1)
+		return err
 	}
-	// Close the listener when the application closes.
 	defer l.Close()
-	fmt.Println("Listening on " + config.Host + ":" + strconv.Itoa(config.Port))
+
+	log.Println("Listening on " + config.Host + ":" + strconv.Itoa(config.Port))
+
 	for {
-		// Listen for an incoming connection.
 		conn, err := l.Accept()
 		if err != nil {
-			fmt.Println("Error accepting: ", err.Error())
-			os.Exit(1)
+			return err
 		}
-		// Handle connections in a new goroutine.
+
 		go handleRequest(conn)
 	}
 }
 
 // Handles incoming requests.
 func handleRequest(conn net.Conn) {
-	// Make a buffer to hold incoming data.
-
+	log.Println("conn:  " + conn.RemoteAddr().String())
 	for {
 		buf := make([]byte, 1024)
-		// Read the incoming connection into the buffer.
 		_, err := conn.Read(buf)
 		if err != nil {
-			fmt.Println("Error reading:", err.Error())
+			log.Println("Error reading:", err.Error())
 		}
+
 		msg_type, err := strconv.Atoi(string(buf[0]))
 		if err != nil {
-			fmt.Println("Error first byte not an number:", err.Error())
+			log.Println("Error first byte not an number:", err.Error())
 		}
+		buf = buf[1:]
 
 		conn.Write([]byte("Message received."))
 		switch msg.MsgType(msg_type) {
+		case msg.MsgErr:
+			log.Println(string(buf))
+			return
 		case msg.Exit:
 			conn.Close()
 			return
 		case msg.Echo:
 			conn.Write(buf)
 			break
+		case msg.Event:
+			// TODO:
+			break
 		default:
 		}
-		println(string(buf))
+
+		log.Print(string(buf))
 	}
 }

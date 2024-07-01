@@ -4,45 +4,47 @@ package main
 // event based system
 
 import (
+	"brige/app/client"
 	"brige/app/server"
-	"errors"
 	"log"
 	"os"
-	"strconv"
 )
 
-type Config struct {
-	ServerConfig server.ServerConfig
-}
-
-func print_help() {
-	println(os.Args[0] + " <HOST> <PORT>")
-}
-
-func parse_args() (Config, error) {
-	if len(os.Args) != 3 {
-		print_help()
-		return Config{}, errors.New("incorect amount of arguments")
-	}
-	host := os.Args[1]
-	port, err := strconv.Atoi(os.Args[2])
-	if err != nil {
-		return Config{}, err
-	}
-
-	var config Config = Config{
-		ServerConfig: server.ServerConfig{
-			Host: host,
-			Port: port,
-		},
-	}
-	return config, nil
-}
-
 func main() {
-	config, err := parse_args()
-	if err != nil {
-		log.Fatal(err)
+	switch os.Args[1] {
+	case "-s", "--server":
+		var server_setup server.ServerSetup
+		var err error
+		if len(os.Args) == 3 {
+			server_setup, err = server.LoadServerSetup(os.Args[2])
+		} else {
+			server_setup, err = server.LoadServerSetup("server_config.json")
+		}
+		if err != nil {
+			log.Fatalln(err)
+		}
+		err = server.Start(server_setup)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		return
+	case "-c", "--client":
+		var client_setup client.ClientSetup
+		var err error
+		if len(os.Args) == 3 {
+			client_setup, err = client.LoadClientSetup(os.Args[2])
+		} else {
+			client_setup, err = client.LoadClientSetup("client_config.json")
+		}
+		if err != nil {
+			log.Fatalln(err)
+		}
+		_ = client_setup
+		//err = client.Start(client_setup)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		return
+
 	}
-	server.Entry(config.ServerConfig)
 }
