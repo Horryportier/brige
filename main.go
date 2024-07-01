@@ -1,9 +1,7 @@
 package main
 
 // NOTE:
-// brige is server to server task dispatcher
-// IDEA:
-// two servers talking to each other and sending information and commands.
+// event based system
 
 import (
 	"brige/app/server"
