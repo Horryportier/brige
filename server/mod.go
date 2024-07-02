@@ -15,8 +15,9 @@ import (
 )
 
 type Connection struct {
-	conn      net.Conn
-	observing []string
+	conn          net.Conn
+	observing     []string
+	current_event chan event.Event
 }
 
 type Server struct {
@@ -65,13 +66,27 @@ func (s Server) Start(setup ServerSetup) error {
 
 		log.Println("acceping connection")
 		connection_info := make(chan Connection, 10)
-		connection_info <- Connection{conn: conn}
+		connection_info <- Connection{conn: conn, current_event: make(chan event.Event, 10)}
 		s.connections = append(s.connections, connection_info)
-		go handleRequest(connection_info)
+		go handleRequest(connection_info, s)
+		select {
+		// TODO: ya that is blocking server bad idea
+		case e := <-s.event_queue:
+			for _, c := range s.connections {
+				connection := <-c
+				for _, name := range connection.observing {
+					if e.Name == name {
+						connection.current_event <- e
+					}
+				}
+				c <- connection
+			}
+		}
+
 	}
 }
 
-func handleRequest(connectionch chan Connection) {
+func handleRequest(connectionch chan Connection, server Server) {
 	log.Println("handling request")
 	connection := <-connectionch
 	log.Println("conn:  " + connection.conn.RemoteAddr().String())
@@ -111,8 +126,24 @@ func handleRequest(connectionch chan Connection) {
 			connection.conn.Write(buf)
 			break
 		case msg.Event:
+			var event event.Event
+			err := json.Unmarshal(buf, &event)
+			if err != nil {
+				log.Println("Can't unmarshal event:", err)
+				continue
+			}
+			server.event_queue <- event
 			break
 		default:
+		}
+		select {
+		case e := <-connection.current_event:
+			buf, err := json.Marshal(e)
+			if err != nil {
+				log.Println("failed to send event:", err)
+			}
+			connection.conn.Write(append(buf, '\n'))
+
 		}
 
 		log.Print("msg: ", string(buf))

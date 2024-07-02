@@ -16,9 +16,9 @@ var (
 )
 
 type ClientSetup struct {
-	ServerIp   string        `json:"server_ip"`
-	ServerPort int           `json:"server_port"`
-	Connected  []event.Event `json:"connected"`
+	ServerIp   string              `json:"server_ip"`
+	ServerPort int                 `json:"server_port"`
+	Connected  []event.EventTriger `json:"connected"`
 }
 
 // BUG: adds one word at the time
@@ -50,7 +50,7 @@ func LoadClientSetup(path string) (ClientSetup, error) {
 }
 
 type Client struct {
-	events []event.Event
+	events []event.EventTriger
 }
 
 func New() Client {
@@ -98,7 +98,7 @@ func (c Client) Start(setup ClientSetup) error {
 		case m := <-msgch:
 			log.Println("msg: ", m)
 			log.Println("writing msg")
-			_, err = conn.Write([]byte(strconv.Itoa(int(msg.Echo)) + m + "\n"))
+			_, err = conn.Write([]byte(strconv.Itoa(int(msg.Event)) + m + "\n"))
 			if err != nil {
 				return err
 			}
