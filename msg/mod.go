@@ -5,6 +5,7 @@ type Response int
 
 const (
 	MsgErr MsgType = iota
+	Inital
 	Event
 	Echo
 	Exit

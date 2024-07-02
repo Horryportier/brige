@@ -23,7 +23,8 @@ func main() {
 		if err != nil {
 			log.Fatalln(err)
 		}
-		err = server.Start(server_setup)
+		s := server.New()
+		err = s.Start(server_setup)
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -39,8 +40,8 @@ func main() {
 		if err != nil {
 			log.Fatalln(err)
 		}
-		_ = client_setup
-		//err = client.Start(client_setup)
+		c := client.New()
+		err = c.Start(client_setup)
 		if err != nil {
 			log.Fatalln(err)
 		}

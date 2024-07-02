@@ -3,6 +3,10 @@ package server
 import (
 	"brige/app/event"
 	"brige/app/msg"
+	"bufio"
+	"io"
+
+	//"brige/app/utils"
 	"encoding/json"
 	"log"
 	"net"
@@ -10,15 +14,14 @@ import (
 	"strconv"
 )
 
-var (
-	server = Server{make(chan []event.Event), make(chan []Connection)}
-)
-
-type Connection map[net.Conn][]string
+type Connection struct {
+	conn      net.Conn
+	observing []string
+}
 
 type Server struct {
-	event_queue chan []event.Event
-	connections chan []Connection
+	event_queue chan event.Event
+	connections []chan Connection
 }
 
 type ServerSetup struct {
@@ -40,15 +43,19 @@ func LoadServerSetup(path string) (ServerSetup, error) {
 	return setup, nil
 }
 
-func Start(config ServerSetup) error {
+func New() Server {
+	return Server{make(chan event.Event, 100), make([]chan Connection, 0)}
+}
 
-	l, err := net.Listen("tcp", config.Host+":"+strconv.Itoa(config.Port))
+func (s Server) Start(setup ServerSetup) error {
+
+	l, err := net.Listen("tcp", setup.Host+":"+strconv.Itoa(setup.Port))
 	if err != nil {
 		return err
 	}
 	defer l.Close()
 
-	log.Println("Listening on " + config.Host + ":" + strconv.Itoa(config.Port))
+	log.Println("Listening on " + setup.Host + ":" + strconv.Itoa(setup.Port))
 
 	for {
 		conn, err := l.Accept()
@@ -56,18 +63,27 @@ func Start(config ServerSetup) error {
 			return err
 		}
 
-		go handleRequest(conn)
+		log.Println("acceping connection")
+		connection_info := make(chan Connection, 10)
+		connection_info <- Connection{conn: conn}
+		s.connections = append(s.connections, connection_info)
+		go handleRequest(connection_info)
 	}
 }
 
-// Handles incoming requests.
-func handleRequest(conn net.Conn) {
-	log.Println("conn:  " + conn.RemoteAddr().String())
+func handleRequest(connectionch chan Connection) {
+	log.Println("handling request")
+	connection := <-connectionch
+	log.Println("conn:  " + connection.conn.RemoteAddr().String())
 	for {
-		buf := make([]byte, 1024)
-		_, err := conn.Read(buf)
+		buf, err := bufio.NewReader(connection.conn).ReadBytes('\n')
 		if err != nil {
-			log.Println("Error reading:", err.Error())
+			if err == io.EOF {
+				connectionch <- Connection{}
+				close(connectionch)
+				return
+			}
+			log.Fatal("Failed to read from conn: ", err)
 		}
 
 		msg_type, err := strconv.Atoi(string(buf[0]))
@@ -76,23 +92,29 @@ func handleRequest(conn net.Conn) {
 		}
 		buf = buf[1:]
 
-		conn.Write([]byte("Message received."))
 		switch msg.MsgType(msg_type) {
 		case msg.MsgErr:
 			log.Println(string(buf))
 			return
+		case msg.Inital:
+			log.Println("reciving inital package")
+			var names []string
+			json.Unmarshal(buf, &names)
+			connection.observing = names
+			connectionch <- connection
+			connection.conn.Write(append([]byte(strconv.Itoa(int(msg.Ok))), '\n'))
+			break
 		case msg.Exit:
-			conn.Close()
+			connection.conn.Close()
 			return
 		case msg.Echo:
-			conn.Write(buf)
+			connection.conn.Write(buf)
 			break
 		case msg.Event:
-			// TODO:
 			break
 		default:
 		}
 
-		log.Print(string(buf))
+		log.Print("msg: ", string(buf))
 	}
 }
